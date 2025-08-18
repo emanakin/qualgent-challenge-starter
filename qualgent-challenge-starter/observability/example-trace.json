@@ -1,0 +1,8 @@
+{
+  "traceId": "00000000000000000000000000000000",
+  "spans": [
+    {"name": "agent.plan", "start": 0, "end": 5},
+    {"name": "runner.attach_emulator", "start": 5, "end": 10},
+    {"name": "android_world.execute", "start": 10, "end": 20}
+  ]
+}

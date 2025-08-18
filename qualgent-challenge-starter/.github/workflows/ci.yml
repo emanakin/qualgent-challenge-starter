@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests (placeholder)
+        run: |
+          python3 -V
+          echo "No tests yet"
+
+      - name: Build Docker image
+        run: docker build -t candidate/android-world .
+
+      - name: Smoke test (placeholder)
+        run: |
+          echo "Would run a tiny android_world battery here"
