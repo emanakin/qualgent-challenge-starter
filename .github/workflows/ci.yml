@@ -28,13 +28,13 @@ jobs:
       - name: Python quick tests (lint/smoke)
         run: |
           python3 -V
-          # Basic import test
-          python3 -c "from agents.runner import main; print('Import OK')"
+          # Basic import test with proper PYTHONPATH
+          PYTHONPATH=. python3 -c "from agents.runner import main; print('Import OK')"
 
           # Offline smoke: no device, just ensure runner imports & writes artifacts
           mkdir -p results observability
           export MOCK_ADB=1
-          python3 agents/runner.py --episodes 2 --prompt "search for ci test"
+          PYTHONPATH=. python3 agents/runner.py --episodes 2 --prompt "search for ci test"
 
           # Verify artifacts were created
           ls -la results/
