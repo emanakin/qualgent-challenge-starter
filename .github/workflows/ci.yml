@@ -1,0 +1,132 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: qualgent-runner
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Python quick tests (lint/smoke)
+        run: |
+          python3 -V
+          # Basic import test
+          python3 -c "from agents.runner import main; print('Import OK')"
+
+          # Offline smoke: no device, just ensure runner imports & writes artifacts
+          mkdir -p results observability
+          export MOCK_ADB=1
+          python3 agents/runner.py --episodes 2 --prompt "search for ci test"
+
+          # Verify artifacts were created
+          ls -la results/
+          ls -la observability/
+          echo "Offline smoke test completed"
+
+      - name: Build Docker image
+        run: |
+          docker build -t $REGISTRY/$OWNER/$IMAGE_NAME:sha-${{ github.sha }} .
+          docker tag $REGISTRY/$OWNER/$IMAGE_NAME:sha-${{ github.sha }} $REGISTRY/$OWNER/$IMAGE_NAME:latest
+
+      - name: Test Docker image (offline)
+        run: |
+          # Test that container can run in mock mode
+          docker run --rm -e MOCK_ADB=1 -v "$PWD/results:/workspace/results" \
+            $REGISTRY/$OWNER/$IMAGE_NAME:sha-${{ github.sha }} \
+            python3 agents/runner.py --episodes 1 --prompt "docker test"
+          echo "Docker smoke test completed"
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push $REGISTRY/$OWNER/$IMAGE_NAME:sha-${{ github.sha }}
+          docker push $REGISTRY/$OWNER/$IMAGE_NAME:latest
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            results/
+            observability/
+
+  smoke-online-optional:
+    if: ${{ vars.ENABLE_ONLINE_SMOKE == 'true' && secrets.GENYMOTION_API_TOKEN != '' }}
+    needs: build-test-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python and tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y adb python3-pip
+          pip3 install requests  # For gmsaas API calls
+
+          # Setup Android SDK path for ADB
+          mkdir -p $HOME/android-sdk/platform-tools
+          ln -s "$(which adb)" $HOME/android-sdk/platform-tools/adb
+
+          # Install gmsaas CLI (if available) or use API directly
+          echo "Setting up Genymotion API access"
+
+      - name: Create test device
+        id: device
+        env:
+          GENYMOTION_API_TOKEN: ${{ secrets.GENYMOTION_API_TOKEN }}
+          GM_TEMPLATE: ${{ vars.GM_TEMPLATE || '53d71621-b0b8-4e5a-8cea-0055ea98988f' }}
+        run: |
+          # Create device using API or gmsaas CLI
+          echo "Creating test device for smoke test"
+          # This would use your actual device creation logic
+          echo "device_id=smoke-test-$(date +%s)" >> $GITHUB_OUTPUT
+          echo "adb_port=localhost:5555" >> $GITHUB_OUTPUT
+
+      - name: Run online smoke test
+        env:
+          ANDROID_SERIAL: ${{ steps.device.outputs.adb_port }}
+        run: |
+          # Connect to device
+          adb connect "$ANDROID_SERIAL"
+          adb devices
+
+          # Run 1 episode smoke test
+          python3 agents/runner.py --episodes 1 --prompt "search for online smoke test"
+
+          # Verify results
+          ls -la results/
+          cat results/report.md
+
+      - name: Cleanup test device
+        if: always()
+        env:
+          GENYMOTION_API_TOKEN: ${{ secrets.GENYMOTION_API_TOKEN }}
+          DEVICE_ID: ${{ steps.device.outputs.device_id }}
+        run: |
+          echo "Cleaning up test device: $DEVICE_ID"
+          # Cleanup device using API or gmsaas CLI

@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: device-pool-manager
+spec:
+  schedule: "*/2 * * * *" # Every 2 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: pool-manager
+              image: ghcr.io/YOUR_USER/qualgent-runner:latest
+              command:
+                - /bin/bash
+                - /workspace/infra/device_pool_manager.sh
+                - "3" # Desired pool size
+              env:
+                - name: GENYMOTION_API_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: runner-secrets
+                      key: GENYMOTION_API_TOKEN
+                - name: GM_TEMPLATE
+                  valueFrom:
+                    secretKeyRef:
+                      name: runner-secrets
+                      key: GM_TEMPLATE
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "256Mi"
+          restartPolicy: OnFailure
+      backoffLimit: 3

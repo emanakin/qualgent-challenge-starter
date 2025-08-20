@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: android-world-runner
+  labels:
+    app: android-world-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: android-world-runner
+  template:
+    metadata:
+      labels:
+        app: android-world-runner
+    spec:
+      containers:
+        - name: runner
+          image: ghcr.io/YOUR_USER/qualgent-runner:latest
+          imagePullPolicy: Always
+          env:
+            - name: ANDROID_SERIAL
+              valueFrom:
+                secretKeyRef:
+                  name: runner-secrets
+                  key: ANDROID_SERIAL
+            - name: GENYMOTION_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: runner-secrets
+                  key: GENYMOTION_API_TOKEN
+            - name: TRACE_DIR
+              value: /workspace/observability
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "your-project-id"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - /workspace/healthcheck.sh
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - /workspace/healthcheck.sh
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: results
+              mountPath: /workspace/results
+            - name: observability
+              mountPath: /workspace/observability
+      volumes:
+        - name: results
+          emptyDir: {}
+        - name: observability
+          emptyDir: {}
+      restartPolicy: Always
