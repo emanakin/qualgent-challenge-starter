@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-08-20T12:21:22.179179",
+  "test_type": "baseline_adb_control",
+  "query": "qualgent test",
+  "status": "success",
+  "actions_performed": [
+    "device_wake",
+    "screen_unlock",
+    "browser_search"
+  ]
+}
