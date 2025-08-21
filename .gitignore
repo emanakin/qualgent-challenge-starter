@@ -86,6 +86,11 @@ Thumbs.db
 *.log
 logs/
 results/*.json
+results/*.html
+results/*.csv
+
+observability/*.jsonl
+
 !results/.gitkeep
 
 # Temporary files
